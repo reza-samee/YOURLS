@@ -13,16 +13,24 @@
  *
  * @since 1.6
  * @return array Result of API call
+ *
+ * @update: 1.7.1 @ github.com/reza-samee/YOURLS#category
  */
 function yourls_api_action_shorturl() {
 	$url = ( isset( $_REQUEST['url'] ) ? $_REQUEST['url'] : '' );
 	$keyword = ( isset( $_REQUEST['keyword'] ) ? $_REQUEST['keyword'] : '' );
 	$title = ( isset( $_REQUEST['title'] ) ? $_REQUEST['title'] : '' );
-	$return = yourls_add_new_link( $url, $keyword, $title );
+	$category = ( isset( $_REQUEST['category'] ) ? $_REQUEST['category'] : null );
+
+	yourls_debug_log( "CAT:ACTION $url, $keyword, $category\n" );
+
+	$return = yourls_add_new_link( $url, $keyword, $title, $category );
 	$return['simple'] = ( isset( $return['shorturl'] ) ? $return['shorturl'] : '' ); // This one will be used in case output mode is 'simple'
 	unset( $return['html'] ); // in API mode, no need for our internal HTML output
 	return yourls_apply_filter( 'api_result_shorturl', $return );
 }
+
+
 
 /**
  * API function wrapper: Stats about links (XX top, bottom, last, rand)
@@ -56,6 +64,18 @@ function yourls_api_action_db_stats() {
 function yourls_api_action_url_stats() {
 	$shorturl = ( isset( $_REQUEST['shorturl'] ) ? $_REQUEST['shorturl'] : '' );
 	return yourls_apply_filter( 'api_result_url_stats', yourls_api_url_stats( $shorturl ) );
+}
+
+/**
+ * @since 1.7.1 @ github.com/reza-samee/YOURLS
+ */
+function yourls_api_action_get_cat_links () {
+  $category = ( isset( $_REQUEST['category'] ) ? $_REQUEST['category'] : null );
+  $limit = ( isset ( $_REQUEST['limit'] ) ? $_REQUEST['limit'] : 100 );
+  return yourls_apply_filter(
+    'api_result_cat_links',
+    yourls_get_cat_links( $category, $limit )
+  );
 }
 
 /**

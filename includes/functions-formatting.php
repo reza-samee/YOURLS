@@ -71,6 +71,15 @@ function yourls_sanitize_keyword( $keyword ) {
 }
 
 /**
+ * 
+ */
+function yourls_category_is_valid( $category ) {
+	 if ( !is_string( $category ) ) return false;
+	 if ( strlen( $category ) <= 0 && strlen( $category ) > 8 ) return false;
+	 return ctype_upper( $category );
+}
+
+/**
  * Sanitize a page title. No HTML per W3C http://www.w3.org/TR/html401/struct/global.html#h-7.4.2
  *
  *

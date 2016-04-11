@@ -219,6 +219,7 @@ function yourls_create_sql_tables() {
 		'`timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,'.
 		'`ip` VARCHAR(41) NOT NULL,'.
 		'`clicks` INT(10) UNSIGNED NOT NULL,'.
+		'`category` VARCHAR(8) NULL,'.
 		' PRIMARY KEY  (`keyword`),'.
 		' KEY `timestamp` (`timestamp`),'.
 		' KEY `ip` (`ip`)'.

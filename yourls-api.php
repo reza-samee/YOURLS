@@ -21,6 +21,7 @@ $api_actions = array(
 	'stats'     => 'yourls_api_action_stats',
 	'db-stats'  => 'yourls_api_action_db_stats',
 	'url-stats' => 'yourls_api_action_url_stats',
+	'cat-links' => 'yourls_api_action_get_cat_links',
 	'expand'    => 'yourls_api_action_expand',
 	'version'   => 'yourls_api_action_version',
 );
@@ -28,7 +29,7 @@ $api_actions = yourls_apply_filter( 'api_actions', $api_actions );
 
 // Register API actions
 foreach( (array) $api_actions as $_action => $_callback ) {
-	yourls_add_filter( 'api_action_' . $_action, $_callback, 99 );		
+	yourls_add_filter( 'api_action_' . $_action, $_callback, 99 );
 }
 
 // Try requested API method. Properly registered actions should return an array.

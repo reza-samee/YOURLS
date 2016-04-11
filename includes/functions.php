@@ -1,4 +1,5 @@
 <?php
+
 /*
  * YOURLS
  * Function library
@@ -141,19 +142,23 @@ function yourls_delete_link_by_keyword( $keyword ) {
  * SQL query to insert a new link in the DB. Returns boolean for success or failure of the inserting
  *
  */
-function yourls_insert_link_in_db( $url, $keyword, $title = '' ) {
+function yourls_insert_link_in_db( $url, $keyword, $title = '', $category = null ) {
 	global $ydb;
 	
+	yourls_debug_log( "CAT:InFunction $url, $keyword, $category\n" );
+
 	$url     = yourls_escape( yourls_sanitize_url( $url ) );
 	$keyword = yourls_escape( yourls_sanitize_keyword( $keyword ) );
 	$title   = yourls_escape( yourls_sanitize_title( $title ) );
 
+	yourls_debug_log( "CAT:Sanitized $url, $keyword, $category\n" );
+
 	$table = YOURLS_DB_TABLE_URL;
 	$timestamp = date('Y-m-d H:i:s');
 	$ip = yourls_get_IP();
-	$insert = $ydb->query("INSERT INTO `$table` (`keyword`, `url`, `title`, `timestamp`, `ip`, `clicks`) VALUES('$keyword', '$url', '$title', '$timestamp', '$ip', 0);");
+	$insert = $ydb->query("INSERT INTO `$table` (`keyword`, `url`, `title`, `timestamp`, `ip`, `clicks`, `category`) VALUES('$keyword', '$url', '$title', '$timestamp', '$ip', 0, '$category');");
 	
-	yourls_do_action( 'insert_link', (bool)$insert, $url, $keyword, $title, $timestamp, $ip );
+	yourls_do_action( 'insert_link', (bool)$insert, $url, $keyword, $title, $timestamp, $ip);
 	
 	return (bool)$insert;
 }
@@ -180,7 +185,7 @@ function yourls_url_exists( $url ) {
  * Add a new link in the DB, either with custom keyword, or find one
  *
  */
-function yourls_add_new_link( $url, $keyword = '', $title = '' ) {
+function yourls_add_new_link( $url, $keyword = '', $title = '', $category = null ) {
 	// Allow plugins to short-circuit the whole function
 	$pre = yourls_apply_filter( 'shunt_add_new_link', false, $url, $keyword, $title );
 	if ( false !== $pre )
@@ -195,7 +200,7 @@ function yourls_add_new_link( $url, $keyword = '', $title = '' ) {
 		$return['errorCode'] = '400';
 		return yourls_apply_filter( 'add_new_link_fail_nourl', $return, $url, $keyword, $title );
 	}
-	
+
 	// Prevent DB flood
 	$ip = yourls_get_IP();
 	yourls_check_IP_flood( $ip );
@@ -209,6 +214,14 @@ function yourls_add_new_link( $url, $keyword = '', $title = '' ) {
 			$return['errorCode'] = '400';
 			return yourls_apply_filter( 'add_new_link_fail_noloop', $return, $url, $keyword, $title );
 		}
+	}
+
+	if( !is_null( $category ) && !yourls_category_is_valid( $category ) ) {
+	   $return['status']       = 'fail';
+		$return['code']         = 'error:invalid_category_value';
+		$return['message']      = yourls__('Set a valid category value; An upper-case string with 1-8 chars');
+		$return['errorCode']    = '400';
+		return yourls_apply_filter('add_new_link_fail_invalid_category_value', $return, $url, $keyword, $title);
 	}
 
 	yourls_do_action( 'pre_add_new_link', $url, $keyword, $title );
@@ -240,13 +253,15 @@ function yourls_add_new_link( $url, $keyword = '', $title = '' ) {
 				$return['message'] = yourls_s( 'Short URL %s already exists in database or is reserved', $keyword );
 			} else {
 				// all clear, store !
-				yourls_insert_link_in_db( $url, $keyword, $title );
+				yourls_debug_log( "CAT:1 $url, $keyword, $category\n" );
+				yourls_insert_link_in_db( $url, $keyword, $title, $category );
 				$return['url']      = array('keyword' => $keyword, 'url' => $strip_url, 'title' => $title, 'date' => date('Y-m-d H:i:s'), 'ip' => $ip );
 				$return['status']   = 'success';
 				$return['message']  = /* //translators: eg "http://someurl/ added to DB" */ yourls_s( '%s added to database', yourls_trim_long_string( $strip_url ) );
 				$return['title']    = $title;
 				$return['html']     = yourls_table_add_row( $keyword, $url, $title, $ip, 0, time() );
 				$return['shorturl'] = YOURLS_SITE .'/'. $keyword;
+                $return['category'] = $category;
 			}
 
 		// Create random keyword	
@@ -261,7 +276,8 @@ function yourls_add_new_link( $url, $keyword = '', $title = '' ) {
 				$keyword = yourls_int2string( $id );
 				$keyword = yourls_apply_filter( 'random_keyword', $keyword, $url, $title );
 				if ( yourls_keyword_is_free($keyword) ) {
-					if( @yourls_insert_link_in_db( $url, $keyword, $title ) ){
+					yourls_debug_log( "CAT:KeywordIsFree $url, $keyword, $category\n" );
+					if( @yourls_insert_link_in_db( $url, $keyword, $title, $category ) ){
 						// everything ok, populate needed vars
 						$return['url']      = array('keyword' => $keyword, 'url' => $strip_url, 'title' => $title, 'date' => $timestamp, 'ip' => $ip );
 						$return['status']   = 'success';
@@ -269,6 +285,7 @@ function yourls_add_new_link( $url, $keyword = '', $title = '' ) {
 						$return['title']    = $title;
 						$return['html']     = yourls_table_add_row( $keyword, $url, $title, $ip, 0, time() );
 						$return['shorturl'] = YOURLS_SITE .'/'. $keyword;
+                        $return['category'] = $category;
 					}else{
 						// database error, couldnt store result
 						$return['status']   = 'fail';
@@ -631,6 +648,49 @@ function yourls_get_link_stats( $shorturl ) {
 	}
 
 	return yourls_apply_filter( 'get_link_stats', $return, $shorturl );
+}
+
+function yourls_get_cat_links( $category, $limit ) {
+  global $ydb;
+
+  $table_url = YOURLS_DB_TABLE_URL;
+  $return = null;
+
+  if ( !yourls_category_is_valid( $category ) ) {
+    $return = array(
+      'statusCode' => 400,
+      'message'    => 'Invalid Category'
+    );
+    echo "HERE";
+  } else if ( $limit <= 0 || $limit > 1000 ) {
+    $return = array(
+      'statusCode' => 400,
+      'message'    => 'Invalid Limit( 0 < x <= 1000'
+    );
+  } else {
+    $category = yourls_escape( $category );
+    $limit = (int) yourls_escape( $limit );
+    $query = "SELECT * FROM `$table_url` WHERE `category` = \"$category\" ORDER BY `timestamp` DESC LIMIT $limit";
+    $links = $ydb->get_results($query);
+    
+    $rsl = array();
+    foreach ($links as $link) {
+      $rsl[] = array(
+	"shorturl" => $link->keyword,
+	"url"      => $link->url,
+	"title"    => $link->title,
+	"datetime" => $link->timestamp,
+	"clicks"   => $link->clicks,
+	"category" => $link->category
+      );
+    }
+    
+    $return = array(
+      'statusCode' => 200,
+      'links'      => $rsl
+    );
+  }
+  return yourls_apply_filter( 'get_cat_links', $return, $category, $limit);
 }
 
 /**
